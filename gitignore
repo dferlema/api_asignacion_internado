@@ -1,0 +1,41 @@
+# ============================================================
+# .GITIGNORE — Archivos que NO deben subirse al repositorio
+# ============================================================
+
+# Variables de entorno (contienen contraseñas)
+.env
+*.env
+
+# Entorno virtual de Python
+venv/
+env/
+.venv/
+
+# Archivos compilados de Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyc
+
+# Migraciones generadas (opcional: algunos equipos sí las versionan)
+# */migrations/
+
+# Base de datos SQLite (si se usa en desarrollo)
+*.sqlite3
+db.sqlite3
+
+# Archivos de sistema Windows
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+
+# Archivos de cobertura de tests
+.coverage
+htmlcov/
