@@ -1,24 +1,31 @@
 # ============================================================
 # URLS.PY — App Estudiantes (Capa 1: Enrutamiento)
-# Define qué URL ejecuta qué vista. Sin lógica aquí.
+# Solo rutas de consulta — los datos vienen del ERP Innotech.
+# pk es UUID (str).
 # ============================================================
 
 from django.urls import path
 from .views import (
-    EstudiantesListaCrearView,
+    EstudiantesListaView,
     EstudiantesDetalleView,
     EstudiantesHabilitadosView,
     EstudiantesValidarRequisitosView,
 )
 
 urlpatterns = [
-    # Lista y creación
-    path('', EstudiantesListaCrearView.as_view(), name='estudiantes-lista'),
+    # Lista completa de estudiantes activos
+    path('', EstudiantesListaView.as_view(), name='estudiantes-lista'),
 
-    # Detalle, actualización y eliminación
-    path('<int:pk>/', EstudiantesDetalleView.as_view(), name='estudiantes-detalle'),
-
-    # Endpoints especiales
+    # Endpoints especiales ANTES del detalle para evitar conflictos
     path('habilitados/', EstudiantesHabilitadosView.as_view(), name='estudiantes-habilitados'),
-    path('<int:pk>/validar-requisitos/', EstudiantesValidarRequisitosView.as_view(), name='estudiantes-validar'),
+
+    # Detalle por UUID
+    path('<str:pk>/', EstudiantesDetalleView.as_view(), name='estudiantes-detalle'),
+    path('<str:pk>/validar-requisitos/', EstudiantesValidarRequisitosView.as_view(), name='estudiantes-validar'),
 ]
+
+# Rutas disponibles:
+# GET /api/v1/estudiantes/                          → Listar activos
+# GET /api/v1/estudiantes/habilitados/              → Solo habilitados
+# GET /api/v1/estudiantes/{uuid}/                   → Detalle
+# GET /api/v1/estudiantes/{uuid}/validar-requisitos/ → Validar requisitos

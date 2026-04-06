@@ -1,101 +1,71 @@
 # ============================================================
 # ADMIN.PY — App Plazas
-# Configura el panel de administración de Django para
-# gestionar plazas y asignaciones desde /admin/
+# Actualizado para modelos managed=False de Innotech BD.
+# Nota: el admin de Django puede mostrar modelos managed=False
+# pero NO puede crear/editar registros en tablas de solo lectura
+# si la BD no permite escritura directa desde este esquema.
 # ============================================================
 
 from django.contrib import admin
-from .models import PlazaInternado, AsignacionPlaza
+from .models import (
+    InstitucionReceptora,
+    PlazaPractica,
+    VerificacionRequisito,
+    RankingInternado,
+    AsignacionInternado,
+    ApelacionInternado,
+    ModeloIA,
+    LogPrediccion,
+)
 
 
-@admin.register(PlazaInternado)
-class PlazaInternadoAdmin(admin.ModelAdmin):
-    """
-    Panel admin para gestión de plazas de internado.
-    Accesible desde: http://localhost:8000/admin/plazas/plazainternado/
-    """
-
-    list_display = [
-        'codigo',
-        'institucion',
-        'area',
-        'ciudad',
-        'estado',
-        'periodo',
-        'status',
-    ]
-
-    list_filter  = ['estado', 'area', 'ciudad', 'periodo', 'status']
-    search_fields = ['codigo', 'institucion', 'ciudad']
-    ordering      = ['institucion', 'area']
-
-    readonly_fields = [
-        'date_create', 'user_create', 'ip_create',
-        'date_modification', 'user_modification', 'ip_modification',
-        'date_delete', 'user_delete', 'ip_delete',
-    ]
-
-    fieldsets = (
-        ('Datos de la Plaza', {
-            'fields': ('codigo', 'institucion', 'area', 'ciudad', 'direccion')
-        }),
-        ('Estado y Período', {
-            'fields': ('estado', 'periodo')
-        }),
-        ('Auditoría (ModelBase)', {
-            'classes': ('collapse',),
-            'fields': (
-                'status',
-                'date_create', 'user_create', 'ip_create',
-                'date_modification', 'user_modification', 'ip_modification',
-                'date_delete', 'user_delete', 'ip_delete',
-            )
-        }),
-    )
+@admin.register(InstitucionReceptora)
+class InstitucionReceptoraAdmin(admin.ModelAdmin):
+    list_display  = ['nombre', 'activa']
+    search_fields = ['nombre']
 
 
-@admin.register(AsignacionPlaza)
-class AsignacionPlazaAdmin(admin.ModelAdmin):
-    """
-    Panel admin para consultar asignaciones de plazas.
-    Solo lectura — las asignaciones se crean desde el endpoint
-    POST /api/v1/ranking/asignar/
-    Accesible desde: http://localhost:8000/admin/plazas/asignacionplaza/
-    """
+@admin.register(PlazaPractica)
+class PlazaPracticaAdmin(admin.ModelAdmin):
+    list_display  = ['nombre_plaza', 'id_institucion', 'cupo_total', 'cupo_disponible', 'activa']
+    list_filter   = ['activa']
+    search_fields = ['nombre_plaza', 'id_institucion__nombre']
 
-    list_display = [
-        'posicion_ranking',
-        'estudiante',
-        'plaza',
-        'puntaje_xgboost',
-        'estado',
-        'date_create',              # Fecha de asignación (ModelBase)
-        'status',
-    ]
 
-    list_filter   = ['estado', 'plaza__periodo', 'status']
-    search_fields = ['estudiante__cedula', 'estudiante__nombres', 'plaza__codigo']
-    ordering      = ['posicion_ranking']
+@admin.register(VerificacionRequisito)
+class VerificacionRequisitoAdmin(admin.ModelAdmin):
+    list_display  = ['id_estudiante', 'id_requisito', 'cumple', 'verificado_en']
+    list_filter   = ['cumple']
+    readonly_fields = ['id', 'id_estudiante', 'id_requisito', 'id_periodo', 'verificado_en']
 
-    # Todo es de solo lectura — no se editan asignaciones manualmente
-    readonly_fields = [
-        'estudiante', 'plaza', 'posicion_ranking', 'puntaje_xgboost',
-        'date_create', 'user_create', 'ip_create',
-        'date_modification', 'user_modification', 'ip_modification',
-        'date_delete', 'user_delete', 'ip_delete',
-    ]
 
-    fieldsets = (
-        ('Datos de la Asignación', {
-            'fields': ('estudiante', 'plaza', 'posicion_ranking', 'puntaje_xgboost', 'estado', 'observaciones')
-        }),
-        ('Auditoría (ModelBase)', {
-            'classes': ('collapse',),
-            'fields': (
-                'status',
-                'date_create', 'user_create', 'ip_create',
-                'date_modification', 'user_modification', 'ip_modification',
-                'date_delete', 'user_delete', 'ip_delete',
-            )
-        }),
-    )
+@admin.register(RankingInternado)
+class RankingInternadoAdmin(admin.ModelAdmin):
+    list_display  = ['posicion', 'id_estudiante', 'puntaje_total', 'habilitado', 'id_periodo', 'generado_en']
+    list_filter   = ['habilitado', 'generado_por_ia']
+    ordering      = ['posicion']
+
+
+@admin.register(AsignacionInternado)
+class AsignacionInternadoAdmin(admin.ModelAdmin):
+    list_display  = ['id_ranking', 'id_plaza', 'estado', 'es_automatica', 'fecha_asignacion']
+    list_filter   = ['estado', 'es_automatica']
+
+
+@admin.register(ApelacionInternado)
+class ApelacionInternadoAdmin(admin.ModelAdmin):
+    list_display  = ['id_estudiante', 'estado', 'creado_en']
+    list_filter   = ['estado']
+
+
+@admin.register(ModeloIA)
+class ModeloIAAdmin(admin.ModelAdmin):
+    list_display  = ['nombre', 'version', 'tipo', 'activo', 'fecha_despliegue']
+    list_filter   = ['tipo', 'activo']
+
+
+@admin.register(LogPrediccion)
+class LogPrediccionAdmin(admin.ModelAdmin):
+    list_display  = ['id', 'id_modelo', 'entidad_tipo', 'entidad_id', 'confianza', 'tiempo_ms', 'creado_en']
+    list_filter   = ['id_modelo', 'entidad_tipo']
+    ordering      = ['-creado_en']

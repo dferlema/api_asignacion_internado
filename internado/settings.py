@@ -93,9 +93,11 @@ DATABASES = {
         'PASSWORD': os.getenv('DB_PASSWORD', ''),
         'HOST':     os.getenv('DB_HOST',     'localhost'),
         'PORT':     os.getenv('DB_PORT',     '5432'),
+        'OPTIONS': {
+            'options': '-c search_path=public,core,academico,estudiantil,practicas,ia'
+        },
     }
 }
-
 # ============================================================
 # CACHÉ — Redis
 # Contenedor Docker: redis:7.2

@@ -8,7 +8,7 @@ services:
     container_name: internado_postgres
     restart: always
     environment:
-      POSTGRES_DB:       internado_db
+      POSTGRES_DB:       innotech_db
       POSTGRES_USER:     postgres
       POSTGRES_PASSWORD: postgres123
     ports:

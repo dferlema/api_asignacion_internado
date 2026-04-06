@@ -94,7 +94,7 @@ services:
     container_name: internado_postgres
     restart: always
     environment:
-      POSTGRES_DB:       internado_db
+      POSTGRES_DB:       innotech_db
       POSTGRES_USER:     postgres
       POSTGRES_PASSWORD: postgres123
     ports:
@@ -143,7 +143,7 @@ SECRET_KEY=clave-secreta-proyecto-internado-cambiar-en-produccion
 DEBUG=True
 ALLOWED_HOSTS=localhost,127.0.0.1
 
-DB_NAME=internado_db
+DB_NAME=innotech_db
 DB_USER=postgres
 DB_PASSWORD=postgres123
 DB_HOST=localhost

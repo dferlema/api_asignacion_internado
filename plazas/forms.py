@@ -1,80 +1,59 @@
 # ============================================================
 # FORMS.PY — App Plazas (Capa 6: Validación)
-# Valida los datos de entrada para crear y actualizar plazas.
+# managed=False: valida campos reales de practicas.*
+# Usa Form simple — NO ModelForm.
 # ============================================================
 
 from django import forms
-from .models import PlazaInternado
 
 
-class PlazaInternadoForm(forms.ModelForm):
+class PlazaPracticaForm(forms.Form):
     """
-    Formulario para crear y actualizar plazas de internado.
-    El view instancia este form con request.data antes
-    de delegar al controller.
+    Valida los datos para crear/actualizar practicas.plaza_practica.
+    Usa Form (no ModelForm) porque el modelo es managed=False.
     """
+    AREA_OPCIONES = [
+        ('clinica',          'Clínica'),
+        ('cirugia',          'Cirugía'),
+        ('pediatria',        'Pediatría'),
+        ('ginecologia',      'Ginecología'),
+        ('emergencias',      'Emergencias'),
+        ('medicina_interna', 'Medicina Interna'),
+        ('otro',             'Otro'),
+    ]
 
-    class Meta:
-        model  = PlazaInternado
-        fields = [
-            'codigo', 'institucion', 'area',
-            'ciudad', 'direccion', 'estado', 'periodo',
-        ]
-
-    def clean_codigo(self):
-        """
-        Valida que el código tenga el formato correcto.
-        Formato esperado: PLAZA-AAAA-NNN (ej: PLAZA-2024-001)
-        """
-        codigo = self.cleaned_data.get('codigo', '').strip().upper()
-        if not codigo:
-            raise forms.ValidationError('El código de la plaza es obligatorio.')
-        if len(codigo) < 5:
-            raise forms.ValidationError(
-                'El código de la plaza debe tener al menos 5 caracteres.'
-            )
-        return codigo
-
-    def clean_periodo(self):
-        """Valida el formato del período académico."""
-        periodo = self.cleaned_data.get('periodo', '').strip()
-        if '-' not in periodo:
-            raise forms.ValidationError(
-                'El formato del período no es válido. Use el formato: AAAA-N (ej: 2024-1).'
-            )
-        partes = periodo.split('-')
-        if len(partes) != 2 or not partes[0].isdigit() or len(partes[0]) != 4:
-            raise forms.ValidationError(
-                'Formato inválido. Ejemplo correcto: 2024-1'
-            )
-        return periodo
+    id_institucion  = forms.IntegerField()
+    area            = forms.ChoiceField(choices=AREA_OPCIONES)
+    nombre_plaza    = forms.CharField(max_length=200)
+    cupo_total      = forms.IntegerField(min_value=1, initial=1)
+    cupo_disponible = forms.IntegerField(min_value=0, initial=1)
+    fecha_inicio    = forms.DateField(required=False)
+    fecha_fin       = forms.DateField(required=False)
+    descripcion     = forms.CharField(required=False, widget=forms.Textarea)
+    activa          = forms.BooleanField(required=False, initial=True)
 
     def clean(self):
-        """Validación cruzada: la plaza disponible no puede tener estado cancelada."""
-        cleaned = super().clean()
-        estado = cleaned.get('estado')
-        if estado == 'cancelada':
+        cleaned         = super().clean()
+        cupo_total      = cleaned.get('cupo_total', 1)
+        cupo_disponible = cleaned.get('cupo_disponible', 1)
+        if cupo_disponible > cupo_total:
             raise forms.ValidationError(
-                'No se puede crear una plaza con estado "cancelada" directamente. '
-                'Créela como "disponible" y luego cámbiela de estado si es necesario.'
+                'El cupo disponible no puede superar el cupo total.'
             )
         return cleaned
 
 
-class ActualizarEstadoPlazaForm(forms.Form):
-    """
-    Formulario para actualizar únicamente el estado de una plaza.
-    Usado en el endpoint PATCH de estado.
-    """
-    estado = forms.ChoiceField(
-        choices=PlazaInternado.ESTADO_OPCIONES,
-        error_messages={
-            'required':       'El campo "estado" es obligatorio.',
-            'invalid_choice': 'Estado inválido. Opciones: disponible, ocupada, reservada, cancelada.',
-        }
-    )
-    observaciones = forms.CharField(
-        required=False,
-        max_length=500,
-        help_text='Motivo del cambio de estado (opcional).'
-    )
+class AsignarPeriodoForm(forms.Form):
+    """Valida el período para el endpoint de asignación de ranking."""
+    periodo = forms.CharField(max_length=10)
+
+    def clean_periodo(self):
+        periodo = self.cleaned_data.get('periodo', '').strip()
+        if not periodo or '-' not in periodo:
+            raise forms.ValidationError('Formato inválido. Use AAAA-N (ej: 2024-1).')
+        partes = periodo.split('-')
+        if len(partes) != 2 or not partes[0].isdigit() or len(partes[0]) != 4:
+            raise forms.ValidationError('Formato inválido. Ejemplo: 2024-1')
+        if partes[1] not in ['1', '2']:
+            raise forms.ValidationError('El número de período debe ser 1 o 2.')
+        return periodo

@@ -1,30 +1,19 @@
-# ============================================================
-# VIEWS.PY — App Plazas (Capa 2: HTTP / Validación)
-# Recibe request, valida con Form y delega al Controller.
-# ============================================================
-
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from drf_spectacular.types import OpenApiTypes
-
 from helpers.base_views import VistaAutenticada
 from helpers.response_helper import respuesta_error_validacion
-from .forms import PlazaInternadoForm, ActualizarEstadoPlazaForm
+from .forms import PlazaPracticaForm
 from .controllers import PlazasController
 
 
 class PlazasListaCrearView(VistaAutenticada):
-    """
-    GET  /api/v1/plazas/  → Lista todas las plazas activas
-    POST /api/v1/plazas/  → Crea una nueva plaza
-    """
-
-    @extend_schema(summary='Listar todas las plazas de internado activas')
+    @extend_schema(summary='Listar todas las plazas activas')
     def get(self, request):
         return PlazasController.listar()
 
-    @extend_schema(summary='Crear nueva plaza de internado')
+    @extend_schema(summary='Crear nueva plaza')
     def post(self, request):
-        form = PlazaInternadoForm(request.data)
+        form = PlazaPracticaForm(request.data)
         if not form.is_valid():
             return respuesta_error_validacion(
                 mensaje='Los datos de la plaza no son válidos.',
@@ -34,19 +23,13 @@ class PlazasListaCrearView(VistaAutenticada):
 
 
 class PlazasDetalleView(VistaAutenticada):
-    """
-    GET    /api/v1/plazas/{id}/  → Ver detalle
-    PUT    /api/v1/plazas/{id}/  → Actualizar completo
-    DELETE /api/v1/plazas/{id}/  → Soft Delete
-    """
-
     @extend_schema(summary='Ver detalle de una plaza')
     def get(self, request, pk):
         return PlazasController.detalle(pk)
 
-    @extend_schema(summary='Actualizar plaza de internado')
+    @extend_schema(summary='Actualizar plaza')
     def put(self, request, pk):
-        form = PlazaInternadoForm(request.data)
+        form = PlazaPracticaForm(request.data)
         if not form.is_valid():
             return respuesta_error_validacion(
                 mensaje='Los datos de la plaza no son válidos.',
@@ -60,42 +43,29 @@ class PlazasDetalleView(VistaAutenticada):
 
 
 class PlazasDisponiblesView(VistaAutenticada):
-    """
-    GET /api/v1/plazas/disponibles/?periodo=2024-1
-    Lista solo las plazas con estado 'disponible'.
-    """
-
     @extend_schema(
-        summary='Listar plazas disponibles',
+        summary='Listar plazas con cupo disponible',
         parameters=[
             OpenApiParameter(
                 name='periodo', type=OpenApiTypes.STR,
                 location=OpenApiParameter.QUERY, required=False,
-                description='Filtrar por período (ej: 2024-1). Opcional.',
+                description='Filtrar por período (ej: 2024-1).',
             ),
         ],
     )
     def get(self, request):
-        periodo = request.query_params.get('periodo', None)
-        return PlazasController.disponibles(periodo)
+        return PlazasController.disponibles(request.query_params.get('periodo'))
 
 
 class AsignacionesListaView(VistaAutenticada):
-    """
-    GET /api/v1/plazas/asignaciones/?periodo=2024-1
-    Lista todas las asignaciones registradas en el sistema.
-    """
-
     @extend_schema(
-        summary='Listar todas las asignaciones de plazas',
+        summary='Listar todas las asignaciones',
         parameters=[
             OpenApiParameter(
                 name='periodo', type=OpenApiTypes.STR,
                 location=OpenApiParameter.QUERY, required=False,
-                description='Filtrar por período académico. Opcional.',
             ),
         ],
     )
     def get(self, request):
-        periodo = request.query_params.get('periodo', None)
-        return PlazasController.listar_asignaciones(periodo)
+        return PlazasController.listar_asignaciones(request.query_params.get('periodo'))

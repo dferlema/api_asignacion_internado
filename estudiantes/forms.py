@@ -1,66 +1,70 @@
 # ============================================================
 # FORMS.PY — App Estudiantes (Capa 6: Validación)
-# Valida los datos de entrada ANTES de llegar al controller.
-# El view llama al form, si es válido pasa al controller.
+# managed=False: valida campos reales de estudiantil.estudiante.
+# No hay campos standalone ni de ModelBase.
 # ============================================================
 
 from django import forms
-from .models import Estudiante
+from .models import Estudiante, SituacionEconomica, CargaFamiliar
 
 
-class EstudianteForm(forms.ModelForm):
+class EstudianteForm(forms.Form):
     """
-    Formulario para registrar y actualizar estudiantes.
-    Valida todos los campos antes de que el controller
-    los procese. El view instancia este form con request.data.
+    Formulario para crear/actualizar estudiantil.estudiante.
+    Usa Form en lugar de ModelForm porque el modelo es managed=False
+    y varios campos se insertan vía SQL o desde core.persona.
+    Solo valida los campos que el API recibe directamente.
     """
+    codigo_estudiante = forms.CharField(max_length=20)
+    nivel_actual      = forms.IntegerField(required=False, min_value=1, max_value=12)
+    estado            = forms.ChoiceField(
+        choices=[
+            ('ACTIVO',     'Activo'),
+            ('SUSPENDIDO', 'Suspendido'),
+            ('RETIRADO',   'Retirado'),
+            ('GRADUADO',   'Graduado'),
+            ('BECA',       'Con Beca'),
+        ],
+        required=False
+    )
 
-    class Meta:
-        model  = Estudiante
-        fields = [
-            'cedula', 'nombres', 'apellidos', 'correo', 'telefono',
-            'estado_civil', 'cargas_familiares', 'ubicacion_geografica',
-            'situacion_economica', 'calificaciones', 'nivel_academico',
-            'modulos_ingles_aprobados', 'calificaciones_cerradas',
-        ]
-
-    def clean_cedula(self):
-        """Valida formato de cédula ecuatoriana (10 dígitos)."""
-        cedula = self.cleaned_data.get('cedula', '')
-        if not cedula.isdigit():
-            raise forms.ValidationError('La cédula debe contener solo dígitos.')
-        if len(cedula) != 10:
-            raise forms.ValidationError('La cédula debe tener exactamente 10 dígitos.')
-        return cedula
-
-    def clean_calificaciones(self):
-        """Valida que el promedio esté en rango 0-10."""
-        calificaciones = self.cleaned_data.get('calificaciones')
-        if calificaciones is not None:
-            if calificaciones < 0 or calificaciones > 10:
-                raise forms.ValidationError('Las calificaciones deben estar entre 0 y 10.')
-        return calificaciones
-
-    def clean_nivel_academico(self):
-        """Valida que el nivel esté en rango 1-12."""
-        nivel = self.cleaned_data.get('nivel_academico')
-        if nivel is not None:
-            if nivel < 1 or nivel > 12:
-                raise forms.ValidationError('El nivel académico debe estar entre 1 y 12.')
-        return nivel
-
-    def clean_cargas_familiares(self):
-        """Valida que las cargas familiares no sean un número irreal."""
-        cargas = self.cleaned_data.get('cargas_familiares')
-        if cargas is not None and cargas > 20:
-            raise forms.ValidationError('El número de cargas familiares parece inusual (máx. 20).')
-        return cargas
+    def clean_codigo_estudiante(self):
+        codigo = self.cleaned_data.get('codigo_estudiante', '').strip()
+        if not codigo:
+            raise forms.ValidationError('El código de estudiante es obligatorio.')
+        return codigo
 
 
-class ActualizarRequisitosForm(forms.Form):
+class SituacionEconomicaForm(forms.Form):
     """
-    Formulario para actualizar los requisitos habilitantes
-    de un estudiante de forma independiente.
+    Formulario para crear/actualizar estudiantil.situacion_economica.
     """
-    modulos_ingles_aprobados = forms.BooleanField(required=False)
-    calificaciones_cerradas  = forms.BooleanField(required=False)
+    NIVEL_POBREZA_OPCIONES = [
+        ('EXTREMA', 'Pobreza Extrema'),
+        ('BAJA',    'Nivel Bajo'),
+        ('MEDIA',   'Nivel Medio'),
+        ('ALTA',    'Nivel Alto'),
+    ]
+    nivel_pobreza           = forms.ChoiceField(choices=NIVEL_POBREZA_OPCIONES)
+    ingreso_familiar        = forms.DecimalField(required=False, max_digits=10, decimal_places=2)
+    numero_miembros_hogar   = forms.IntegerField(required=False, min_value=1)
+    tiene_bono_desarrollo   = forms.BooleanField(required=False)
+    tiene_discapacidad      = forms.BooleanField(required=False)
+    porcentaje_discapacidad = forms.IntegerField(required=False, min_value=0, max_value=100)
+    trabaja                 = forms.BooleanField(required=False)
+    horas_trabajo_semana    = forms.IntegerField(required=False, min_value=0)
+
+
+class CargaFamiliarForm(forms.Form):
+    """Formulario para crear estudiantil.carga_familiar."""
+    PARENTESCO_OPCIONES = [
+        ('HIJO',     'Hijo/a'),
+        ('PADRE',    'Padre'),
+        ('MADRE',    'Madre'),
+        ('CONYUGUE', 'Cónyuge'),
+        ('HERMANO',  'Hermano/a'),
+        ('OTRO',     'Otro'),
+    ]
+    parentesco    = forms.ChoiceField(choices=PARENTESCO_OPCIONES)
+    edad          = forms.IntegerField(required=False, min_value=0, max_value=120)
+    es_dependiente = forms.BooleanField(required=False, initial=True)
