@@ -1,7 +1,7 @@
 # ============================================================
 # SERIALIZERS.PY — App Estudiantes (Capa 5: Serialización)
-# managed=False: todos los campos vienen de tablas Innotech.
-# No hay campos standalone ni de ModelBase.
+# managed=False: campos reales de tablas Innotech.
+# Solo importa modelos de estudiantes.models.
 # ============================================================
 
 from rest_framework import serializers
@@ -9,12 +9,6 @@ from .models import Estudiante, SituacionEconomica, CargaFamiliar
 
 
 class EstudianteSerializer(serializers.ModelSerializer):
-    """
-    Serializer completo de estudiantil.estudiante.
-    Las propiedades del modelo resuelven datos desde
-    core.persona, core.parroquia, estudiantil.situacion_economica
-    y estudiantil.carga_familiar automáticamente.
-    """
     nombre_completo                = serializers.ReadOnlyField()
     cedula                         = serializers.ReadOnlyField()
     correo                         = serializers.ReadOnlyField()
@@ -48,7 +42,6 @@ class EstudianteSerializer(serializers.ModelSerializer):
 
 
 class EstudianteResumenSerializer(serializers.ModelSerializer):
-    """Serializer reducido para listados y ranking."""
     nombre_completo                = serializers.ReadOnlyField()
     cedula                         = serializers.ReadOnlyField()
     cumple_requisitos_habilitantes = serializers.ReadOnlyField()
@@ -71,7 +64,6 @@ class EstudianteResumenSerializer(serializers.ModelSerializer):
 
 
 class SituacionEconomicaSerializer(serializers.ModelSerializer):
-    """Serializer para estudiantil.situacion_economica."""
     nivel_numerico = serializers.ReadOnlyField()
 
     class Meta:
@@ -94,8 +86,6 @@ class SituacionEconomicaSerializer(serializers.ModelSerializer):
 
 
 class CargaFamiliarSerializer(serializers.ModelSerializer):
-    """Serializer para estudiantil.carga_familiar."""
-
     class Meta:
         model  = CargaFamiliar
         fields = ['id', 'id_estudiante', 'parentesco', 'edad', 'es_dependiente']
@@ -103,7 +93,6 @@ class CargaFamiliarSerializer(serializers.ModelSerializer):
 
 
 class ValidacionRequisitosSerializer(serializers.Serializer):
-    """Serializer para la respuesta de validación de requisitos habilitantes."""
     estudiante_id               = serializers.CharField()
     nombre_completo             = serializers.CharField()
     cedula                      = serializers.CharField()

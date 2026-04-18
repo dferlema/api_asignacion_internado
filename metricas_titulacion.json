@@ -1,0 +1,140 @@
+{
+  "sistema": "Sistema 17 — Asignación Automatizada de Prácticas Preprofesionales",
+  "universidad": "Universidad Bolivariana del Ecuador",
+  "modelo": {
+    "nombre": "XGBoost-Internado",
+    "version": "1.0.0",
+    "tipo": "XGBRegressor",
+    "hiperparametros": {
+      "n_estimators": 100,
+      "learning_rate": 0.1,
+      "max_depth": 4,
+      "subsample": 0.8,
+      "random_state": 42,
+      "verbosity": 0
+    },
+    "pesos_institucionales": {
+      "calificaciones": 0.3,
+      "cargas_familiares": 0.25,
+      "necesidad_economica": 0.2,
+      "ubicacion_rural": 0.15,
+      "nivel_academico": 0.1
+    }
+  },
+  "metricas_regresion": {
+    "MAE": 0.0081,
+    "RMSE": 0.0114,
+    "R2": 0.9999,
+    "interpretacion": {
+      "MAE": "El modelo se desvía en promedio este valor del puntaje real",
+      "RMSE": "Penaliza más los errores grandes; indica dispersión del error",
+      "R2": "Proporción de varianza explicada por el modelo (1.0 = perfecto)"
+    }
+  },
+  "importancia_variables": {
+    "cargas_familiares": 60.55,
+    "ubicacion_geografica": 0.0,
+    "situacion_economica": 31.82,
+    "calificaciones": 0.0,
+    "nivel_academico": 7.63,
+    "es_zona_rural": 0.0,
+    "necesidad_economica": 0.0
+  },
+  "estadisticas_ranking": {
+    "total_estudiantes": 24,
+    "puntaje_maximo": 7.5772,
+    "puntaje_minimo": 3.1074,
+    "puntaje_promedio": 5.1333,
+    "desviacion_estandar": 1.3647,
+    "mediana": 5.1995
+  },
+  "rendimiento": {
+    "tiempo_pipeline_segundos": 0.555,
+    "tiempo_pipeline_ms": 555
+  },
+  "top_5_ranking": [
+    {
+      "posicion": 1,
+      "nombre": "Ana Martínez Ramírez",
+      "cedula": "1700000003",
+      "puntaje": 7.5772,
+      "calificaciones": 7.0,
+      "cargas_familiares": 5,
+      "situacion_economica": 1,
+      "ubicacion": "URBANA"
+    },
+    {
+      "posicion": 2,
+      "nombre": "Sofía Sánchez Morales",
+      "cedula": "1700000007",
+      "puntaje": 7.5066,
+      "calificaciones": 7.0,
+      "cargas_familiares": 5,
+      "situacion_economica": 1,
+      "ubicacion": "URBANA"
+    },
+    {
+      "posicion": 3,
+      "nombre": "Lucía González Flores",
+      "cedula": "1700000005",
+      "puntaje": 6.9968,
+      "calificaciones": 7.0,
+      "cargas_familiares": 4,
+      "situacion_economica": 1,
+      "ubicacion": "URBANA"
+    },
+    {
+      "posicion": 4,
+      "nombre": "Luis Ramírez Jiménez",
+      "cedula": "1700000008",
+      "puntaje": 6.9968,
+      "calificaciones": 7.0,
+      "cargas_familiares": 4,
+      "situacion_economica": 1,
+      "ubicacion": "URBANA"
+    },
+    {
+      "posicion": 5,
+      "nombre": "Carlos López Torres",
+      "cedula": "1700000004",
+      "puntaje": 6.4066,
+      "calificaciones": 7.0,
+      "cargas_familiares": 3,
+      "situacion_economica": 1,
+      "ubicacion": "URBANA"
+    }
+  ],
+  "ejemplo_shap_posicion_1": {
+    "valor_base": 5.0745,
+    "contribuciones_por_variable": {
+      "cargas_familiares": -1.1405,
+      "situacion_economica": -0.639,
+      "nivel_academico": -0.0926,
+      "ubicacion_geografica": 0.0,
+      "calificaciones": 0.0,
+      "es_zona_rural": 0.0,
+      "necesidad_economica": 0.0
+    },
+    "variable_mas_influyente": "cargas_familiares",
+    "interpretacion": [
+      {
+        "variable": "cargas_familiares",
+        "contribucion": -1.1405,
+        "impacto": "negativo",
+        "magnitud": "alta"
+      },
+      {
+        "variable": "situacion_economica",
+        "contribucion": -0.639,
+        "impacto": "negativo",
+        "magnitud": "alta"
+      },
+      {
+        "variable": "nivel_academico",
+        "contribucion": -0.0926,
+        "impacto": "negativo",
+        "magnitud": "baja"
+      }
+    ]
+  }
+}

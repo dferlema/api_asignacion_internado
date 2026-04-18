@@ -1,7 +1,6 @@
 # ============================================================
 # CONTROLLERS.PY — App Ranking (Capa 3: Orquestación)
-# Actualizado para modelos compatibles con Innotech BD.
-# El ranking ahora se persiste en RankingInternado.
+# explicar() ahora resuelve el estudiante por UUID, cédula o nombre.
 # ============================================================
 
 from helpers.response_helper import (
@@ -16,16 +15,13 @@ class RankingController:
 
     @staticmethod
     def generar():
-        """
-        Ejecuta XGBoost, registra logs en ia.log_prediccion
-        y retorna el ranking. No persiste en ranking_internado.
-        """
+        """Ejecuta XGBoost + SHAP y retorna el ranking."""
         try:
             servicio    = RankingBusiness()
             ranking     = servicio.generar_ranking()
             importancia = servicio.importancia_variables()
             return respuesta_exito(
-                mensaje='Ranking generado exitosamente con XGBoost.',
+                mensaje='Ranking generado exitosamente con XGBoost + SHAP.',
                 datos={
                     'total_estudiantes':     len(ranking),
                     'ranking':               ranking,
@@ -40,20 +36,12 @@ class RankingController:
 
     @staticmethod
     def asignar(periodo: str):
-        """
-        Genera ranking, persiste en ranking_internado,
-        asigna plazas y guarda asignaciones en BD.
-        """
+        """Genera ranking con SHAP, persiste y asigna plazas."""
         try:
             servicio  = RankingBusiness()
             ranking   = servicio.generar_ranking(periodo_codigo=periodo)
-
-            # Persistir ranking en practicas.ranking_internado
             RankingBusiness.persistir_ranking(ranking, periodo)
-
-            # Asignar plazas
             resultado = RankingBusiness.asignar_plazas(ranking, periodo)
-
             return respuesta_exito(
                 mensaje=(
                     f'Asignación completada para {periodo}. '
@@ -70,7 +58,7 @@ class RankingController:
 
     @staticmethod
     def consultar(periodo: str):
-        """Consulta el ranking y asignaciones guardadas en BD."""
+        """Consulta ranking y asignaciones guardadas en BD."""
         try:
             resultado = RankingBusiness.consultar_ranking(periodo)
             return respuesta_exito(
@@ -79,3 +67,34 @@ class RankingController:
             )
         except Exception as e:
             return respuesta_error_general(manejar_excepcion(e, 'consultar_ranking'))
+
+    @staticmethod
+    def explicar(periodo: str, estudiante_id: str = None,
+                 cedula: str = None, nombre: str = None):
+        """
+        Genera explicación SHAP para un estudiante.
+        Resuelve el estudiante por UUID, cédula o nombre (en ese orden).
+        Al menos uno de los tres parámetros de búsqueda es obligatorio.
+        """
+        try:
+            # --- Resolver el UUID del estudiante según el parámetro recibido ---
+            uuid_resuelto = RankingBusiness.resolver_estudiante(
+                estudiante_id=estudiante_id,
+                cedula=cedula,
+                nombre=nombre,
+            )
+
+            servicio    = RankingBusiness()
+            explicacion = servicio.explicar_estudiante(uuid_resuelto, periodo)
+            return respuesta_exito(
+                mensaje=(
+                    f'Explicación SHAP generada para '
+                    f'{explicacion.get("nombre_completo", uuid_resuelto)} '
+                    f'— período {periodo}.'
+                ),
+                datos=explicacion
+            )
+        except ValueError as e:
+            return respuesta_error_validacion(mensaje=str(e))
+        except Exception as e:
+            return respuesta_error_general(manejar_excepcion(e, 'explicar_shap'))

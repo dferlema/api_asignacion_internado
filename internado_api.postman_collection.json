@@ -1,0 +1,628 @@
+{
+  "info": {
+    "name": "Sistema 17 — Internado API",
+    "description": "Colección completa de endpoints para el Sistema de Asignación Prioritaria de Internado Preprofesional — Universidad Bolivariana del Ecuador.\n\n**Instrucciones de uso:**\n1. Importar esta colección en Postman\n2. Crear un environment llamado 'Internado Local' con las variables indicadas\n3. Ejecutar primero '01 - Login' para obtener el token automáticamente\n4. El token se guarda en la variable {{access_token}} automáticamente\n\n**Variables de entorno requeridas:**\n- base_url: http://127.0.0.1:8000\n- username: Ubeuser\n- password: Ube123+\n- access_token: (se llena automáticamente al hacer login)\n- periodo: 2024-1\n- uuid_estudiante: (copiar desde respuesta del ranking)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {"key": "base_url",        "value": "http://127.0.0.1:8000",  "type": "string"},
+    {"key": "periodo",         "value": "2024-1",                  "type": "string"},
+    {"key": "access_token",    "value": "",                        "type": "string"},
+    {"key": "uuid_estudiante", "value": "",                        "type": "string"},
+    {"key": "cedula_prueba",   "value": "1700000020",              "type": "string"}
+  ],
+  "item": [
+
+    {
+      "name": "🔐 Autenticación",
+      "item": [
+        {
+          "name": "01 - Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Guardar el token automáticamente tras login exitoso",
+                  "var response = pm.response.json();",
+                  "if (response.success) {",
+                  "    // Extraer token de la cookie Set-Cookie",
+                  "    var cookies = pm.response.headers.get('Set-Cookie');",
+                  "    pm.test('Login exitoso', function() {",
+                  "        pm.expect(response.success).to.be.true;",
+                  "    });",
+                  "    pm.test('Respuesta tiene datos del usuario', function() {",
+                  "        pm.expect(response.data.username).to.exist;",
+                  "    });",
+                  "    console.log('Login exitoso para:', response.data.username);",
+                  "} else {",
+                  "    pm.test('Login fallido', function() {",
+                  "        pm.expect(response.success).to.be.true;",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": ["// Pre-request: limpiar token anterior", "pm.collectionVariables.set('access_token', '');"],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"username\": \"{{username}}\",\n    \"password\": \"{{password}}\"\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "login", ""]
+            },
+            "description": "Inicia sesión y obtiene el JWT. El token se guarda en la cookie access_token.\n\n**Nota:** Copiar el valor del token de la respuesta y pegarlo en la variable de colección `access_token` para usarlo en los demás endpoints."
+          }
+        },
+        {
+          "name": "02 - Perfil del usuario",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{access_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/perfil/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "perfil", ""]
+            },
+            "description": "Retorna los datos del usuario autenticado."
+          }
+        },
+        {
+          "name": "03 - Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"refresh\": \"{{refresh_token}}\"\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/refresh/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "refresh", ""]
+            },
+            "description": "Renueva el access token usando el refresh token."
+          }
+        },
+        {
+          "name": "04 - Logout",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{access_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/logout/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "logout", ""]
+            },
+            "description": "Cierra la sesión e invalida el token."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "👨‍🎓 Estudiantes",
+      "item": [
+        {
+          "name": "05 - Listar estudiantes activos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var response = pm.response.json();",
+                  "pm.test('Respuesta exitosa', function() {",
+                  "    pm.expect(response.success).to.be.true;",
+                  "});",
+                  "pm.test('Tiene array de datos', function() {",
+                  "    pm.expect(response.data).to.be.an('array');",
+                  "});",
+                  "// Guardar UUID del primer estudiante para pruebas",
+                  "if (response.data && response.data.length > 0) {",
+                  "    pm.collectionVariables.set('uuid_estudiante', response.data[0].id);",
+                  "    console.log('UUID guardado:', response.data[0].id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{access_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/estudiantes/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "estudiantes", ""]
+            },
+            "description": "Lista todos los estudiantes con estado=ACTIVO de estudiantil.estudiante.\nEl UUID del primer estudiante se guarda automáticamente en la variable uuid_estudiante."
+          }
+        },
+        {
+          "name": "06 - Listar estudiantes habilitados",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var response = pm.response.json();",
+                  "pm.test('Respuesta exitosa', function() {",
+                  "    pm.expect(response.success).to.be.true;",
+                  "});",
+                  "pm.test('Tiene total_habilitados', function() {",
+                  "    pm.expect(response.data.total_habilitados).to.be.a('number');",
+                  "});",
+                  "console.log('Total habilitados:', response.data.total_habilitados);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{access_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/estudiantes/habilitados/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "estudiantes", "habilitados", ""]
+            },
+            "description": "Retorna solo los estudiantes que cumplen ambos requisitos habilitantes:\n- Módulos de inglés aprobados\n- Calificaciones del período cerradas\n\nEstos son los que entrarán en el ranking XGBoost."
+          }
+        },
+        {
+          "name": "07 - Detalle de un estudiante",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{access_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/estudiantes/{{uuid_estudiante}}/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "estudiantes", "{{uuid_estudiante}}", ""]
+            },
+            "description": "Retorna el detalle completo de un estudiante por su UUID.\nUsa el uuid_estudiante guardado en el paso 05."
+          }
+        },
+        {
+          "name": "08 - Validar requisitos de un estudiante",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var response = pm.response.json();",
+                  "pm.test('Respuesta exitosa', function() {",
+                  "    pm.expect(response.success).to.be.true;",
+                  "});",
+                  "pm.test('Tiene campo cumple_todos_los_requisitos', function() {",
+                  "    pm.expect(response.data.cumple_todos_los_requisitos).to.be.a('boolean');",
+                  "});",
+                  "console.log('Cumple requisitos:', response.data.cumple_todos_los_requisitos);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{access_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/estudiantes/{{uuid_estudiante}}/validar-requisitos/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "estudiantes", "{{uuid_estudiante}}", "validar-requisitos", ""]
+            },
+            "description": "Valida si un estudiante cumple los requisitos habilitantes.\nRetorna detalle de cada requisito y mensaje descriptivo."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🏥 Plazas",
+      "item": [
+        {
+          "name": "09 - Listar plazas activas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var response = pm.response.json();",
+                  "pm.test('Respuesta exitosa', function() {",
+                  "    pm.expect(response.success).to.be.true;",
+                  "});",
+                  "if (response.data && response.data.length > 0) {",
+                  "    pm.collectionVariables.set('id_plaza', response.data[0].id);",
+                  "    console.log('ID plaza guardado:', response.data[0].id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{access_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/plazas/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "plazas", ""]
+            },
+            "description": "Lista todas las plazas activas de practicas.plaza_practica.\nGuarda el ID de la primera plaza en la variable id_plaza."
+          }
+        },
+        {
+          "name": "10 - Plazas disponibles (con cupo)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{access_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/plazas/disponibles/?periodo={{periodo}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "plazas", "disponibles", ""],
+              "query": [{"key": "periodo", "value": "{{periodo}}", "description": "Filtrar por período (opcional)"}]
+            },
+            "description": "Retorna solo las plazas con cupo_disponible > 0.\nFiltra por período si se indica."
+          }
+        },
+        {
+          "name": "11 - Detalle de una plaza",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{access_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/plazas/{{id_plaza}}/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "plazas", "{{id_plaza}}", ""]
+            },
+            "description": "Detalle de una plaza por su ID entero."
+          }
+        },
+        {
+          "name": "12 - Crear plaza",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}"},
+              {"key": "Content-Type",   "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"id_institucion\": 1,\n    \"area\": \"clinica\",\n    \"nombre_plaza\": \"Plaza Clínica General\",\n    \"cupo_total\": 2,\n    \"cupo_disponible\": 2,\n    \"activa\": true\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/plazas/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "plazas", ""]
+            },
+            "description": "Crea una nueva plaza en practicas.plaza_practica.\nid_institucion debe ser un ID válido de practicas.institucion_receptora."
+          }
+        },
+        {
+          "name": "13 - Actualizar plaza",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}"},
+              {"key": "Content-Type",   "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"id_institucion\": 1,\n    \"area\": \"cirugia\",\n    \"nombre_plaza\": \"Plaza Cirugía Actualizada\",\n    \"cupo_total\": 3,\n    \"cupo_disponible\": 3,\n    \"activa\": true\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/plazas/{{id_plaza}}/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "plazas", "{{id_plaza}}", ""]
+            },
+            "description": "Actualiza una plaza existente por su ID."
+          }
+        },
+        {
+          "name": "14 - Desactivar plaza",
+          "request": {
+            "method": "DELETE",
+            "header": [{"key": "Authorization", "value": "Bearer {{access_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/plazas/{{id_plaza}}/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "plazas", "{{id_plaza}}", ""]
+            },
+            "description": "Desactiva una plaza (activa=False). No elimina físicamente."
+          }
+        },
+        {
+          "name": "15 - Listar asignaciones",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{access_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/plazas/asignaciones/?periodo={{periodo}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "plazas", "asignaciones", ""],
+              "query": [{"key": "periodo", "value": "{{periodo}}"}]
+            },
+            "description": "Lista todas las asignaciones de practicas.asignacion_internado.\nFiltrar por período es opcional."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🤖 Ranking XGBoost + SHAP",
+      "item": [
+        {
+          "name": "16 - Generar ranking (XGBoost + SHAP)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var response = pm.response.json();",
+                  "pm.test('Ranking generado exitosamente', function() {",
+                  "    pm.expect(response.success).to.be.true;",
+                  "});",
+                  "pm.test('Tiene al menos 1 estudiante', function() {",
+                  "    pm.expect(response.data.total_estudiantes).to.be.above(0);",
+                  "});",
+                  "pm.test('Primer estudiante tiene explicacion_shap', function() {",
+                  "    var primero = response.data.ranking[0];",
+                  "    pm.expect(primero.explicacion_shap).to.exist;",
+                  "    pm.expect(primero.explicacion_shap.contribuciones_por_variable).to.exist;",
+                  "});",
+                  "// Guardar UUID del primer estudiante del ranking",
+                  "if (response.data.ranking && response.data.ranking.length > 0) {",
+                  "    var primero = response.data.ranking[0];",
+                  "    pm.collectionVariables.set('uuid_estudiante', primero.estudiante_id);",
+                  "    console.log('#1 Ranking:', primero.nombre_completo, '— Puntaje:', primero.puntaje_xgboost);",
+                  "    console.log('Variable más influyente:', primero.explicacion_shap.variable_mas_influyente);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{access_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/ranking/generar/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "ranking", "generar", ""]
+            },
+            "description": "Ejecuta XGBoost sobre los estudiantes habilitados.\nRetorna el ranking completo con explicación SHAP por estudiante.\nRegistra logs en ia.log_prediccion.\n\n**No guarda en BD** — usar endpoint Asignar para persistir."
+          }
+        },
+        {
+          "name": "17 - Asignar plazas (persistir ranking)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var response = pm.response.json();",
+                  "pm.test('Asignación exitosa', function() {",
+                  "    pm.expect(response.success).to.be.true;",
+                  "});",
+                  "pm.test('Tiene total_asignados', function() {",
+                  "    pm.expect(response.data.total_asignados).to.be.a('number');",
+                  "});",
+                  "console.log('Asignados:', response.data.total_asignados);",
+                  "console.log('Lista espera:', response.data.total_lista_espera);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{access_token}}"},
+              {"key": "Content-Type",   "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"periodo\": \"{{periodo}}\"\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/ranking/asignar/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "ranking", "asignar", ""]
+            },
+            "description": "Genera el ranking, lo persiste en practicas.ranking_internado\ny asigna plazas disponibles del período.\n\nLos valores SHAP se guardan en detalle_puntaje (JSONB).\nToda la operación es transaccional."
+          }
+        },
+        {
+          "name": "18 - Consultar ranking guardado en BD",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var response = pm.response.json();",
+                  "pm.test('Consulta exitosa', function() {",
+                  "    pm.expect(response.success).to.be.true;",
+                  "});",
+                  "console.log('Total en ranking:', response.data.total);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{access_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/ranking/consultar/?periodo={{periodo}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "ranking", "consultar", ""],
+              "query": [{"key": "periodo", "value": "{{periodo}}"}]
+            },
+            "description": "Consulta el ranking y asignaciones persistidos en\npracticas.ranking_internado y practicas.asignacion_internado.\nNo vuelve a ejecutar XGBoost."
+          }
+        },
+        {
+          "name": "19 - Explicar SHAP por cédula (respaldo legal)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var response = pm.response.json();",
+                  "pm.test('Explicación SHAP generada', function() {",
+                  "    pm.expect(response.success).to.be.true;",
+                  "});",
+                  "pm.test('Tiene nombre_completo', function() {",
+                  "    pm.expect(response.data.nombre_completo).to.exist;",
+                  "});",
+                  "pm.test('Tiene resumen_legal', function() {",
+                  "    pm.expect(response.data.resumen_legal).to.exist;",
+                  "    pm.expect(response.data.resumen_legal.texto_acta).to.exist;",
+                  "});",
+                  "if (response.data.resumen_legal) {",
+                  "    console.log('--- ACTA LEGAL ---');",
+                  "    console.log(response.data.resumen_legal.texto_acta);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{access_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/ranking/explicar/?periodo={{periodo}}&cedula={{cedula_prueba}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "ranking", "explicar", ""],
+              "query": [
+                {"key": "periodo", "value": "{{periodo}}"},
+                {"key": "cedula",  "value": "{{cedula_prueba}}", "description": "Cédula del estudiante (10 dígitos)"}
+              ]
+            },
+            "description": "Genera la explicación SHAP completa buscando por cédula.\nIdeal para responder apelaciones: adjuntar resumen_legal.texto_acta en el acta de resolución."
+          }
+        },
+        {
+          "name": "20 - Explicar SHAP por nombre",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{access_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/ranking/explicar/?periodo={{periodo}}&nombre=David",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "ranking", "explicar", ""],
+              "query": [
+                {"key": "periodo", "value": "{{periodo}}"},
+                {"key": "nombre",  "value": "David", "description": "Nombre o apellido parcial"}
+              ]
+            },
+            "description": "Genera la explicación SHAP buscando por nombre o apellido parcial.\nSi hay más de un resultado, retorna lista de coincidencias para ser más específico."
+          }
+        },
+        {
+          "name": "21 - Explicar SHAP por UUID",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{access_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/ranking/explicar/?periodo={{periodo}}&estudiante_id={{uuid_estudiante}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "ranking", "explicar", ""],
+              "query": [
+                {"key": "periodo",        "value": "{{periodo}}"},
+                {"key": "estudiante_id",  "value": "{{uuid_estudiante}}", "description": "UUID del estudiante"}
+              ]
+            },
+            "description": "Genera la explicación SHAP buscando por UUID.\nEl UUID se guarda automáticamente al ejecutar el endpoint 16 (Generar ranking)."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "📚 Documentación",
+      "item": [
+        {
+          "name": "22 - Swagger UI",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/docs/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "docs", ""]
+            },
+            "description": "Interfaz Swagger UI — documentación interactiva de todos los endpoints."
+          }
+        },
+        {
+          "name": "23 - ReDoc",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/redoc/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "redoc", ""]
+            },
+            "description": "Documentación ReDoc — vista alternativa de la API."
+          }
+        },
+        {
+          "name": "24 - Schema OpenAPI (JSON)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/schema/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "schema", ""]
+            },
+            "description": "Descarga el schema OpenAPI en formato JSON."
+          }
+        }
+      ]
+    }
+
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{"key": "token", "value": "{{access_token}}", "type": "string"}]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": ["// Pre-request global: verificar que el token esté disponible"]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Test global: verificar tiempo de respuesta",
+          "pm.test('Tiempo de respuesta < 5000ms', function() {",
+          "    pm.expect(pm.response.responseTime).to.be.below(5000);",
+          "});"
+        ]
+      }
+    }
+  ]
+}

@@ -1,7 +1,6 @@
 # ============================================================
 # VIEWS.PY — App Ranking (Capa 2: HTTP / Validación)
-# Recibe request, valida con Form y delega al Controller.
-# Compatible con Innotech BD.
+# ExplicarShapView acepta búsqueda por UUID, cédula o nombre.
 # ============================================================
 
 from drf_spectacular.utils import extend_schema, OpenApiParameter
@@ -14,18 +13,14 @@ from .controllers import RankingController
 
 
 class GenerarRankingView(VistaAutenticada):
-    """
-    GET /api/v1/ranking/generar/
-    Ejecuta XGBoost y retorna el ranking.
-    Registra logs en ia.log_prediccion pero no persiste el ranking.
-    """
+    """GET /api/v1/ranking/generar/ — Ejecuta XGBoost + SHAP."""
 
     @extend_schema(
-        summary='Generar ranking automático con XGBoost',
+        summary='Generar ranking automático con XGBoost + SHAP',
         description=(
-            'Ejecuta XGBoost sobre los estudiantes habilitados y retorna '
-            'el ranking ordenado por puntaje. Registra logs en ia.log_prediccion. '
-            'Para persistir el ranking usar POST /asignar/.'
+            'Ejecuta XGBoost sobre los estudiantes habilitados. '
+            'Cada entrada incluye explicacion_shap por variable. '
+            'Registra logs en ia.log_prediccion.'
         ),
     )
     def get(self, request):
@@ -33,24 +28,10 @@ class GenerarRankingView(VistaAutenticada):
 
 
 class AsignarPlazasView(VistaAutenticada):
-    """
-    POST /api/v1/ranking/asignar/
-    Genera ranking, lo persiste en practicas.ranking_internado
-    y asigna plazas disponibles del período.
-
-    Body JSON requerido:
-    {
-        "periodo": "2024-1"
-    }
-    """
+    """POST /api/v1/ranking/asignar/ — Asigna plazas con SHAP persistido."""
 
     @extend_schema(
-        summary='Asignar plazas de internado según ranking XGBoost',
-        description=(
-            'Genera el ranking con XGBoost, lo persiste en ranking_internado '
-            'y asigna automáticamente las plazas disponibles del período. '
-            'Toda la operación es transaccional.'
-        ),
+        summary='Asignar plazas según ranking XGBoost + SHAP',
         request={
             'application/json': {
                 'type': 'object',
@@ -72,10 +53,7 @@ class AsignarPlazasView(VistaAutenticada):
 
 
 class ConsultarRankingView(VistaAutenticada):
-    """
-    GET /api/v1/ranking/consultar/?periodo=2024-1
-    Consulta el ranking y asignaciones ya persistidos en BD.
-    """
+    """GET /api/v1/ranking/consultar/?periodo=2024-1"""
 
     @extend_schema(
         summary='Consultar ranking y asignaciones guardadas',
@@ -95,3 +73,77 @@ class ConsultarRankingView(VistaAutenticada):
                 errores=form.errors
             )
         return RankingController.consultar(form.cleaned_data['periodo'])
+
+
+class ExplicarShapView(VistaAutenticada):
+    """
+    GET /api/v1/ranking/explicar/?periodo=2024-1&cedula=1700000023
+    GET /api/v1/ranking/explicar/?periodo=2024-1&estudiante_id={uuid}
+    GET /api/v1/ranking/explicar/?periodo=2024-1&nombre=David
+
+    Genera la explicación SHAP para un estudiante.
+    Acepta búsqueda por UUID, cédula o nombre (en ese orden de prioridad).
+    Al menos uno de los tres es obligatorio junto con el período.
+
+    Uso legal: adjuntar en actas de apelación para respaldo técnico.
+    """
+
+    @extend_schema(
+        summary='Explicación SHAP — buscar por UUID, cédula o nombre',
+        description=(
+            'Genera la explicación SHAP completa de un estudiante. '
+            'Busca por: estudiante_id (UUID), cedula (10 dígitos) o nombre (parcial). '
+            'Retorna contribución de cada variable al puntaje y resumen legal. '
+            'Ideal para responder apelaciones con evidencia técnica.'
+        ),
+        parameters=[
+            OpenApiParameter(
+                name='periodo', type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY, required=True,
+                description='Período académico. Ejemplo: 2024-1',
+            ),
+            OpenApiParameter(
+                name='estudiante_id', type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY, required=False,
+                description='UUID del estudiante. Prioridad 1.',
+            ),
+            OpenApiParameter(
+                name='cedula', type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY, required=False,
+                description='Número de cédula (10 dígitos). Prioridad 2.',
+            ),
+            OpenApiParameter(
+                name='nombre', type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY, required=False,
+                description='Nombre o apellido (parcial). Prioridad 3.',
+            ),
+        ],
+    )
+    def get(self, request):
+        # Validar período obligatorio
+        periodo = request.query_params.get('periodo', '').strip()
+        if not periodo:
+            return respuesta_error_validacion(
+                mensaje='El parámetro "periodo" es obligatorio. Ejemplo: ?periodo=2024-1'
+            )
+
+        # Obtener parámetros de búsqueda
+        estudiante_id = request.query_params.get('estudiante_id', '').strip() or None
+        cedula        = request.query_params.get('cedula', '').strip() or None
+        nombre        = request.query_params.get('nombre', '').strip() or None
+
+        # Validar que al menos uno de búsqueda esté presente
+        if not any([estudiante_id, cedula, nombre]):
+            return respuesta_error_validacion(
+                mensaje=(
+                    'Debe proporcionar al menos un criterio de búsqueda: '
+                    '"estudiante_id" (UUID), "cedula" o "nombre".'
+                )
+            )
+
+        return RankingController.explicar(
+            periodo=periodo,
+            estudiante_id=estudiante_id,
+            cedula=cedula,
+            nombre=nombre,
+        )

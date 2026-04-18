@@ -12,6 +12,16 @@
 #   Estudiante         → estudiantil.estudiante
 #   SituacionEconomica → estudiantil.situacion_economica
 #   CargaFamiliar      → estudiantil.carga_familiar
+#
+# CORRECCIONES aplicadas:
+#   - modulos_ingles_aprobados: usa SQL nativo con JOIN a
+#     practicas.requisito_habilitante en lugar de tipo_requisito
+#     (campo que no existe en la BD real de Innotech).
+#   - calificaciones_cerradas: ídem.
+#   - promedio_academico: cursor.fetchone() dentro del bloque
+#     with para evitar "cursor already closed".
+#   - Ambas propiedades de requisitos usan el mismo patrón
+#     seguro: leer resultado DENTRO del bloque with.
 # ============================================================
 
 import uuid
@@ -92,7 +102,6 @@ class Persona(models.Model):
 class Periodo(models.Model):
     """
     academico.periodo — Período académico (ej: 2024-1).
-    Reemplaza el VARCHAR periodo_codigo que usábamos antes.
     """
     id           = models.SmallIntegerField(primary_key=True)
     nombre       = models.CharField(max_length=40)
@@ -127,6 +136,65 @@ class Carrera(models.Model):
 
 
 # ============================================================
+# HELPER INTERNO — consulta SQL segura para requisitos
+# ============================================================
+
+def _verificar_requisito(estudiante_id: str, tipo: str) -> bool:
+    """
+    Consulta practicas.verificacion_requisito uniendo con
+    practicas.requisito_habilitante para obtener el tipo real.
+
+    Se implementa como función de módulo (no método de clase)
+    para evitar problemas con el ciclo de vida del cursor
+    dentro de propiedades del modelo.
+
+    Args:
+        estudiante_id (str): UUID del estudiante.
+        tipo (str): 'INGLES' o 'CALIFICACIONES'.
+
+    Returns:
+        bool: True si el estudiante cumple el requisito.
+    """
+    from django.db import connection
+    sql = """
+        SELECT COUNT(*)
+        FROM practicas.verificacion_requisito vr
+        JOIN practicas.requisito_habilitante rh
+          ON rh.id = vr.id_requisito
+        WHERE vr.id_estudiante = %s
+          AND rh.tipo = %s
+          AND vr.cumple = TRUE
+          AND rh.activo = TRUE
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(sql, [str(estudiante_id), tipo])
+        fila = cursor.fetchone()
+    return (fila[0] > 0) if fila else False
+
+
+def _obtener_promedio(estudiante_id: str):
+    """
+    Consulta el promedio académico desde la vista
+    estudiantil.v_promedio_estudiante_periodo.
+
+    Returns:
+        float o None si no hay calificaciones registradas.
+    """
+    from django.db import connection
+    sql = """
+        SELECT promedio
+        FROM estudiantil.v_promedio_estudiante_periodo
+        WHERE id_estudiante = %s
+        ORDER BY id_periodo DESC
+        LIMIT 1
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(sql, [str(estudiante_id)])
+        fila = cursor.fetchone()
+    return float(fila[0]) if fila and fila[0] else None
+
+
+# ============================================================
 # TABLAS DEL ESQUEMA estudiantil
 # ============================================================
 
@@ -135,18 +203,20 @@ class Estudiante(models.Model):
     estudiantil.estudiante — Tabla principal del estudiante en Innotech.
     UUID como PK. Vinculado a core.persona para datos personales.
 
-    IMPORTANTE: managed=False — Django NO crea esta tabla.
+    managed=False — Django NO crea esta tabla.
     La tabla ya existe en la BD Innotech.
 
-    Para las variables del ranking XGBoost se usan:
-    - promedio: calculado desde estudiantil.calificacion (vista v_promedio_estudiante_periodo)
-    - cargas: conteo desde estudiantil.carga_familiar
-    - situacion_economica: desde estudiantil.situacion_economica
-    - ubicacion: desde core.parroquia via core.persona
-    - nivel_actual: campo directo
-    - requisitos habilitantes: desde practicas.verificacion_requisito
+    Variables para XGBoost:
+    - promedio_academico   → vista estudiantil.v_promedio_estudiante_periodo
+    - total_cargas         → COUNT de estudiantil.carga_familiar
+    - nivel_situacion_eco  → estudiantil.situacion_economica.nivel_pobreza
+    - ubicacion_tipo       → core.parroquia.tipo via core.persona
+    - nivel_actual         → campo directo de estudiantil.estudiante
+    - requisitos           → practicas.verificacion_requisito (SQL nativo)
     """
-    id                = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    id                = models.UUIDField(
+        primary_key=True, default=uuid.uuid4, editable=False
+    )
     id_persona        = models.OneToOneField(
         Persona,
         on_delete=models.PROTECT,
@@ -164,19 +234,26 @@ class Estudiante(models.Model):
     nivel_actual      = models.SmallIntegerField(null=True, blank=True)
     modalidad         = models.CharField(
         max_length=20,
-        choices=[('PRESENCIAL','Presencial'),('VIRTUAL','Virtual'),('HIBRIDA','Híbrida')],
+        choices=[
+            ('PRESENCIAL', 'Presencial'),
+            ('VIRTUAL',    'Virtual'),
+            ('HIBRIDA',    'Híbrida'),
+        ],
         null=True, blank=True
     )
-    estado            = models.CharField(
+    estado = models.CharField(
         max_length=20,
         choices=[
-            ('ACTIVO','Activo'), ('SUSPENDIDO','Suspendido'),
-            ('RETIRADO','Retirado'), ('GRADUADO','Graduado'), ('BECA','Con Beca'),
+            ('ACTIVO',     'Activo'),
+            ('SUSPENDIDO', 'Suspendido'),
+            ('RETIRADO',   'Retirado'),
+            ('GRADUADO',   'Graduado'),
+            ('BECA',       'Con Beca'),
         ],
         default='ACTIVO'
     )
-    beca              = models.BooleanField(default=False)
-    tipo_beca         = models.CharField(max_length=60, null=True, blank=True)
+    beca      = models.BooleanField(default=False)
+    tipo_beca = models.CharField(max_length=60, null=True, blank=True)
 
     class Meta:
         managed  = False
@@ -185,90 +262,100 @@ class Estudiante(models.Model):
     def __str__(self):
         return f"{self.nombre_completo} — {self.cedula}"
 
-    # ── Propiedades que resuelven datos desde tablas relacionadas ──
+    # ── Propiedades de datos personales (desde core.persona) ──────────
 
     @property
     def nombre_completo(self):
+        """Nombre completo desde core.persona."""
         return self.id_persona.nombre_completo
 
     @property
     def cedula(self):
+        """Número de identificación desde core.persona."""
         return self.id_persona.numero_identificacion
 
     @property
     def correo(self):
-        return self.id_persona.email_institucional or self.id_persona.email_personal or ''
+        """Correo institucional o personal desde core.persona."""
+        return (
+            self.id_persona.email_institucional
+            or self.id_persona.email_personal
+            or ''
+        )
 
     @property
     def ubicacion_tipo(self):
-        """Retorna URBANA o RURAL desde core.parroquia via core.persona."""
-        if self.id_persona.id_parroquia:
-            return self.id_persona.id_parroquia.tipo
+        """
+        Tipo de ubicación (URBANA/RURAL) desde core.parroquia
+        a través de core.persona.
+        """
+        parroquia = self.id_persona.id_parroquia
+        if parroquia:
+            return parroquia.tipo
         return None
+
+    # ── Propiedades de variables XGBoost ──────────────────────────────
 
     @property
     def nivel_situacion_economica(self):
         """
-        Retorna nivel numérico 1-4 para XGBoost desde
-        estudiantil.situacion_economica (último registro).
+        Nivel económico numérico 1-4 desde estudiantil.situacion_economica.
+        Retorna el último registro. Por defecto 3 (MEDIA) si no hay dato.
         """
         sit = self.situaciones_economicas.order_by('-id').first()
         if sit:
             return sit.nivel_numerico
-        return 3  # valor por defecto: MEDIA
+        return 3
 
     @property
     def total_cargas_familiares(self):
-        """Retorna conteo de dependientes desde estudiantil.carga_familiar."""
+        """
+        Número de dependientes económicos desde estudiantil.carga_familiar.
+        """
         return self.cargas_familiares.filter(es_dependiente=True).count()
-
-    @property
-    def modulos_ingles_aprobados(self):
-        """
-        Verifica si el estudiante aprobó inglés desde
-        practicas.verificacion_requisito.
-        """
-        return self.verificaciones_requisitos.filter(
-            tipo_requisito='INGLES',
-            cumple=True
-        ).exists()
-
-    @property
-    def calificaciones_cerradas(self):
-        """
-        Verifica si las calificaciones están cerradas desde
-        practicas.verificacion_requisito.
-        """
-        return self.verificaciones_requisitos.filter(
-            tipo_requisito='CALIFICACIONES',
-            cumple=True
-        ).exists()
-
-    @property
-    def cumple_requisitos_habilitantes(self):
-        return self.modulos_ingles_aprobados and self.calificaciones_cerradas
 
     @property
     def promedio_academico(self):
         """
-        Retorna promedio desde la vista estudiantil.v_promedio_estudiante_periodo.
-        Si no hay calificaciones registradas retorna None.
+        Promedio académico desde estudiantil.v_promedio_estudiante_periodo.
+        Retorna None si el estudiante no tiene calificaciones registradas.
+        Usa función de módulo _obtener_promedio() para manejo seguro
+        del cursor PostgreSQL.
         """
-        from django.db import connection
-        with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT promedio
-                FROM estudiantil.v_promedio_estudiante_periodo
-                WHERE id_estudiante = %s
-                ORDER BY id_periodo DESC
-                LIMIT 1
-                """,
-                [str(self.id)]
-            )
-            row = cursor.fetchone()
-        return float(row[0]) if row and row[0] else None
+        return _obtener_promedio(str(self.id))
 
+    # ── Propiedades de requisitos habilitantes ─────────────────────────
+    # Usan SQL nativo con JOIN a practicas.requisito_habilitante
+    # porque la tabla practicas.verificacion_requisito no tiene
+    # el campo tipo_requisito — solo tiene id_requisito (FK entero).
+    # La función _verificar_requisito() maneja el cursor de forma
+    # segura (lee el resultado DENTRO del bloque with).
+
+    @property
+    def modulos_ingles_aprobados(self):
+        """
+        True si el estudiante aprobó los módulos de inglés.
+        Consulta practicas.verificacion_requisito + requisito_habilitante.
+        """
+        return _verificar_requisito(str(self.id), 'INGLES')
+
+    @property
+    def calificaciones_cerradas(self):
+        """
+        True si las calificaciones del período están cerradas.
+        Consulta practicas.verificacion_requisito + requisito_habilitante.
+        """
+        return _verificar_requisito(str(self.id), 'CALIFICACIONES')
+
+    @property
+    def cumple_requisitos_habilitantes(self):
+        """True si cumple AMBOS requisitos habilitantes."""
+        return self.modulos_ingles_aprobados and self.calificaciones_cerradas
+
+
+# ============================================================
+# TABLAS DEL ESQUEMA estudiantil — modelos relacionados
+# ============================================================
 
 class SituacionEconomica(models.Model):
     """
@@ -296,9 +383,13 @@ class SituacionEconomica(models.Model):
         db_column='id_periodo',
         null=True, blank=True
     )
-    ingreso_familiar        = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    ingreso_familiar        = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
     numero_miembros_hogar   = models.SmallIntegerField(null=True, blank=True)
-    nivel_pobreza           = models.CharField(max_length=20, choices=NIVEL_POBREZA_OPCIONES, null=True, blank=True)
+    nivel_pobreza           = models.CharField(
+        max_length=20, choices=NIVEL_POBREZA_OPCIONES, null=True, blank=True
+    )
     tiene_bono_desarrollo   = models.BooleanField(default=False)
     tiene_discapacidad      = models.BooleanField(default=False)
     porcentaje_discapacidad = models.SmallIntegerField(null=True, blank=True)
@@ -307,8 +398,8 @@ class SituacionEconomica(models.Model):
     actualizado_en          = models.DateField(auto_now=True)
 
     class Meta:
-        managed     = False
-        db_table    = 'estudiantil\".\"situacion_economica'
+        managed         = False
+        db_table        = 'estudiantil\".\"situacion_economica'
         unique_together = [['id_estudiante', 'id_periodo']]
 
     def __str__(self):
@@ -345,8 +436,8 @@ class CargaFamiliar(models.Model):
         db_column='id_estudiante',
         related_name='cargas_familiares'
     )
-    parentesco    = models.CharField(max_length=30, choices=PARENTESCO_OPCIONES)
-    edad          = models.SmallIntegerField(null=True, blank=True)
+    parentesco     = models.CharField(max_length=30, choices=PARENTESCO_OPCIONES)
+    edad           = models.SmallIntegerField(null=True, blank=True)
     es_dependiente = models.BooleanField(default=True)
 
     class Meta:

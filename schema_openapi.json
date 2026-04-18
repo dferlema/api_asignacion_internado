@@ -1,0 +1,466 @@
+openapi: 3.0.3
+info:
+  title: API — Sistema de Internado Preprofesional
+  version: 1.0.0
+  description: API REST con XGBoost para asignación prioritaria de plazas.
+paths:
+  /api/v1/auth/login/:
+    post:
+      operationId: api_v1_auth_login_create
+      description: 'Autentica al usuario con username y password. Genera tokens JWT
+        almacenados en cookies HttpOnly. Rate limiting: máximo 5 intentos fallidos
+        por IP cada 5 minutos.'
+      summary: Iniciar sesión
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  example: admin
+                password:
+                  type: string
+                  example: tu_password
+              required:
+              - username
+              - password
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/logout/:
+    post:
+      operationId: api_v1_auth_logout_create
+      description: Elimina las cookies JWT del navegador, cerrando la sesión del usuario
+        actual.
+      summary: Cerrar sesión
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/perfil/:
+    get:
+      operationId: api_v1_auth_perfil_retrieve
+      description: Retorna los datos del usuario cuyo token JWT está en la cookie.
+      summary: Ver perfil del usuario autenticado
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/refresh/:
+    post:
+      operationId: api_v1_auth_refresh_create
+      description: |-
+        Takes a refresh type JSON web token and returns an access type JSON web
+        token if the refresh token is valid.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: ''
+  /api/v1/auth/verify/:
+    post:
+      operationId: api_v1_auth_verify_create
+      description: |-
+        Takes a token and indicates if it is valid.  This view provides no
+        information about a token's fitness for a particular use.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenVerify'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenVerify'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenVerify'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenVerify'
+          description: ''
+  /api/v1/estudiantes/:
+    get:
+      operationId: api_v1_estudiantes_retrieve
+      description: Lee desde estudiantil.estudiante. Solo retorna estado=ACTIVO.
+      summary: Listar estudiantes activos
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/estudiantes/{id}/:
+    get:
+      operationId: api_v1_estudiantes_retrieve_2
+      description: GET /api/v1/estudiantes/{uuid}/ — Detalle de un estudiante.
+      summary: Ver detalle de un estudiante
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/estudiantes/{id}/validar-requisitos/:
+    get:
+      operationId: api_v1_estudiantes_validar_requisitos_retrieve
+      description: Consulta practicas.verificacion_requisito y retorna detalle.
+      summary: Validar requisitos habilitantes de un estudiante
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/estudiantes/habilitados/:
+    get:
+      operationId: api_v1_estudiantes_habilitados_retrieve
+      description: Retorna estudiantes con inglés aprobado Y calificaciones cerradas
+        según practicas.verificacion_requisito.
+      summary: Listar estudiantes habilitados para internado
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/plazas/:
+    get:
+      operationId: api_v1_plazas_retrieve
+      description: |-
+        Vista base para endpoints que REQUIEREN autenticación JWT.
+        El token se lee automáticamente desde la cookie HttpOnly
+        'access_token'. Si no hay token válido, retorna 401.
+
+        Uso:
+            class MiVista(VistaAutenticada):
+                def get(self, request):
+                    usuario = request.user  # Siempre disponible
+                    ...
+      summary: Listar todas las plazas activas
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: api_v1_plazas_create
+      description: |-
+        Vista base para endpoints que REQUIEREN autenticación JWT.
+        El token se lee automáticamente desde la cookie HttpOnly
+        'access_token'. Si no hay token válido, retorna 401.
+
+        Uso:
+            class MiVista(VistaAutenticada):
+                def get(self, request):
+                    usuario = request.user  # Siempre disponible
+                    ...
+      summary: Crear nueva plaza
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/plazas/{id}/:
+    get:
+      operationId: api_v1_plazas_retrieve_2
+      description: |-
+        Vista base para endpoints que REQUIEREN autenticación JWT.
+        El token se lee automáticamente desde la cookie HttpOnly
+        'access_token'. Si no hay token válido, retorna 401.
+
+        Uso:
+            class MiVista(VistaAutenticada):
+                def get(self, request):
+                    usuario = request.user  # Siempre disponible
+                    ...
+      summary: Ver detalle de una plaza
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: api_v1_plazas_update
+      description: |-
+        Vista base para endpoints que REQUIEREN autenticación JWT.
+        El token se lee automáticamente desde la cookie HttpOnly
+        'access_token'. Si no hay token válido, retorna 401.
+
+        Uso:
+            class MiVista(VistaAutenticada):
+                def get(self, request):
+                    usuario = request.user  # Siempre disponible
+                    ...
+      summary: Actualizar plaza
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: api_v1_plazas_destroy
+      description: |-
+        Vista base para endpoints que REQUIEREN autenticación JWT.
+        El token se lee automáticamente desde la cookie HttpOnly
+        'access_token'. Si no hay token válido, retorna 401.
+
+        Uso:
+            class MiVista(VistaAutenticada):
+                def get(self, request):
+                    usuario = request.user  # Siempre disponible
+                    ...
+      summary: Eliminar plaza (soft delete)
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/plazas/asignaciones/:
+    get:
+      operationId: api_v1_plazas_asignaciones_retrieve
+      description: |-
+        Vista base para endpoints que REQUIEREN autenticación JWT.
+        El token se lee automáticamente desde la cookie HttpOnly
+        'access_token'. Si no hay token válido, retorna 401.
+
+        Uso:
+            class MiVista(VistaAutenticada):
+                def get(self, request):
+                    usuario = request.user  # Siempre disponible
+                    ...
+      summary: Listar todas las asignaciones
+      parameters:
+      - in: query
+        name: periodo
+        schema:
+          type: string
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/plazas/disponibles/:
+    get:
+      operationId: api_v1_plazas_disponibles_retrieve
+      description: |-
+        Vista base para endpoints que REQUIEREN autenticación JWT.
+        El token se lee automáticamente desde la cookie HttpOnly
+        'access_token'. Si no hay token válido, retorna 401.
+
+        Uso:
+            class MiVista(VistaAutenticada):
+                def get(self, request):
+                    usuario = request.user  # Siempre disponible
+                    ...
+      summary: Listar plazas con cupo disponible
+      parameters:
+      - in: query
+        name: periodo
+        schema:
+          type: string
+        description: 'Filtrar por período (ej: 2024-1).'
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/ranking/asignar/:
+    post:
+      operationId: api_v1_ranking_asignar_create
+      description: POST /api/v1/ranking/asignar/ — Asigna plazas con SHAP persistido.
+      summary: Asignar plazas según ranking XGBoost + SHAP
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                periodo:
+                  type: string
+                  example: 2024-1
+              required:
+              - periodo
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/ranking/consultar/:
+    get:
+      operationId: api_v1_ranking_consultar_retrieve
+      description: GET /api/v1/ranking/consultar/?periodo=2024-1
+      summary: Consultar ranking y asignaciones guardadas
+      parameters:
+      - in: query
+        name: periodo
+        schema:
+          type: string
+        description: 'Período a consultar. Ejemplo: 2024-1'
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/ranking/explicar/:
+    get:
+      operationId: api_v1_ranking_explicar_retrieve
+      description: 'Genera la explicación SHAP completa de un estudiante. Busca por:
+        estudiante_id (UUID), cedula (10 dígitos) o nombre (parcial). Retorna contribución
+        de cada variable al puntaje y resumen legal. Ideal para responder apelaciones
+        con evidencia técnica.'
+      summary: Explicación SHAP — buscar por UUID, cédula o nombre
+      parameters:
+      - in: query
+        name: cedula
+        schema:
+          type: string
+        description: Número de cédula (10 dígitos). Prioridad 2.
+      - in: query
+        name: estudiante_id
+        schema:
+          type: string
+        description: UUID del estudiante. Prioridad 1.
+      - in: query
+        name: nombre
+        schema:
+          type: string
+        description: Nombre o apellido (parcial). Prioridad 3.
+      - in: query
+        name: periodo
+        schema:
+          type: string
+        description: 'Período académico. Ejemplo: 2024-1'
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/ranking/generar/:
+    get:
+      operationId: api_v1_ranking_generar_retrieve
+      description: Ejecuta XGBoost sobre los estudiantes habilitados. Cada entrada
+        incluye explicacion_shap por variable. Registra logs en ia.log_prediccion.
+      summary: Generar ranking automático con XGBoost + SHAP
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+components:
+  schemas:
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+      required:
+      - access
+      - refresh
+    TokenVerify:
+      type: object
+      properties:
+        token:
+          type: string
+          writeOnly: true
+      required:
+      - token
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

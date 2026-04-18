@@ -3,10 +3,48 @@
 # managed=False: lee y escribe en tablas Innotech directamente.
 # No usa ModelBase. No hay soft delete propio —
 # Innotech maneja el campo 'estado' del estudiante.
+#
+# CORRECCIÓN: listar_habilitados() usa SQL nativo con JOIN
+# a practicas.requisito_habilitante en lugar de filtrar por
+# tipo_requisito (campo que NO existe en la BD real).
 # ============================================================
 
 from django.db import transaction, connection
 from .models import Estudiante
+
+
+def _obtener_uuids_habilitados() -> list:
+    """
+    Retorna lista de UUIDs de estudiantes ACTIVOS que cumplen
+    AMBOS requisitos habilitantes (INGLES y CALIFICACIONES)
+    consultando directamente practicas.verificacion_requisito
+    con JOIN a practicas.requisito_habilitante.
+
+    No usa tipo_requisito — ese campo no existe en la BD real.
+    Filtra por rh.tipo que sí es un campo real de Innotech.
+
+    Returns:
+        list: Lista de strings UUID de estudiantes habilitados.
+    """
+    sql = """
+        SELECT DISTINCT e.id::text
+        FROM estudiantil.estudiante e
+        -- Requisito inglés
+        JOIN practicas.verificacion_requisito vi
+          ON vi.id_estudiante = e.id AND vi.cumple = TRUE
+        JOIN practicas.requisito_habilitante ri
+          ON ri.id = vi.id_requisito AND ri.tipo = 'INGLES' AND ri.activo = TRUE
+        -- Requisito calificaciones
+        JOIN practicas.verificacion_requisito vc
+          ON vc.id_estudiante = e.id AND vc.cumple = TRUE
+        JOIN practicas.requisito_habilitante rc
+          ON rc.id = vc.id_requisito AND rc.tipo = 'CALIFICACIONES' AND rc.activo = TRUE
+        WHERE e.estado = 'ACTIVO'
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(sql)
+        filas = cursor.fetchall()
+    return [fila[0] for fila in filas]
 
 
 class EstudiantesBusiness:
@@ -29,28 +67,26 @@ class EstudiantesBusiness:
         """
         Retorna estudiantes ACTIVOS que tienen ambos requisitos
         habilitantes aprobados en practicas.verificacion_requisito.
+
+        Usa SQL nativo (_obtener_uuids_habilitados) porque la tabla
+        practicas.verificacion_requisito no tiene el campo tipo_requisito
+        — solo tiene id_requisito (FK entero a requisito_habilitante).
         """
-        con_ingles = Estudiante.objects.filter(
-            verificaciones_requisitos__tipo_requisito='INGLES',
-            verificaciones_requisitos__cumple=True
-        ).values('id')
-
-        con_calificaciones = Estudiante.objects.filter(
-            verificaciones_requisitos__tipo_requisito='CALIFICACIONES',
-            verificaciones_requisitos__cumple=True
-        ).values('id')
-
+        uuids = _obtener_uuids_habilitados()
+        if not uuids:
+            return Estudiante.objects.none()
         return Estudiante.objects.filter(
+            id__in=uuids,
             estado='ACTIVO',
-            id__in=con_ingles,
-        ).filter(
-            id__in=con_calificaciones
-        ).select_related('id_persona__id_parroquia', 'id_carrera')
+        ).select_related(
+            'id_persona__id_parroquia',
+            'id_carrera',
+        )
 
     @staticmethod
     def obtener_por_id(estudiante_id):
         """
-        Obtiene un estudiante por su UUID desde estudiantil.estudiante.
+        Obtiene un estudiante ACTIVO por su UUID.
         Carga relaciones necesarias para las propiedades del modelo.
         """
         return Estudiante.objects.filter(
@@ -58,7 +94,7 @@ class EstudiantesBusiness:
             estado='ACTIVO'
         ).select_related(
             'id_persona__id_parroquia',
-            'id_carrera'
+            'id_carrera',
         ).first()
 
     @staticmethod
@@ -77,7 +113,7 @@ class EstudiantesBusiness:
     def validar_requisitos(estudiante: Estudiante) -> dict:
         """
         Valida los requisitos habilitantes consultando
-        practicas.verificacion_requisito.
+        practicas.verificacion_requisito vía SQL nativo.
         Retorna detalle completo para la respuesta del API.
         """
         ingles         = estudiante.modulos_ingles_aprobados
@@ -90,6 +126,7 @@ class EstudiantesBusiness:
             faltantes.append('Calificaciones del período cerradas')
 
         cumple = len(faltantes) == 0
+
         if cumple:
             mensaje = (
                 f'{estudiante.nombre_completo} cumple TODOS los requisitos '

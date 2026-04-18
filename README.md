@@ -22,7 +22,7 @@ Capa 6 │ forms.py       → Validación: valida datos de entrada con Django Fo
 ## 🗂️ Estructura del Proyecto
 
 ```
-internado_api_v2/
+internado_api_v1/
 │
 ├── internado/              # Configuración central
 │   ├── settings.py         # Django + JWT + Redis + Middleware
